@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Globe with Animated Camera Orbit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button id="toggleSpin">Toggle Spin</button>
+        <button id="flyToNY">Fly to New York</button>
+        <button id="flyToTokyo">Fly to Tokyo</button>
+        <button id="resetView">Reset View</button>
+    </div>
+
+    <script>
+        // Replace with your Mapbox access token
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/standard',
+            center: [0, 20],
+            zoom: 1.5,
+            projection: 'globe'
+        });
+
+        // Globe spinning state
+        let isSpinning = true;
+        let userInteracting = false;
+
+        // Spin settings
+        const secondsPerRevolution = 120;
+        const maxSpinZoom = 5;
+        const slowSpinZoom = 3;
+
+        // Setup atmosphere
+        map.on('load', () => {
+            map.setFog({
+                color: 'rgb(186, 210, 235)',
+                'high-color': 'rgb(36, 92, 223)',
+                'horizon-blend': 0.02,
+                'space-color': 'rgb(11, 11, 25)',
+                'star-intensity': 0.6
+            });
+        });
+
+        // Handle user interaction
+        map.on('mousedown', () => { userInteracting = true; });
+        map.on('mouseup', () => { userInteracting = false; });
+        map.on('dragend', () => { userInteracting = false; });
+        map.on('touchend', () => { userInteracting = false; });
+
+        // Spin animation
+        function spinGlobe() {
+            const zoom = map.getZoom();
+            
+            if (isSpinning && !userInteracting && zoom < maxSpinZoom) {
+                let distancePerSecond = 360 / secondsPerRevolution;
+                
+                if (zoom > slowSpinZoom) {
+                    const zoomDif = (maxSpinZoom - zoom) / (maxSpinZoom - slowSpinZoom);
+                    distancePerSecond *= zoomDif;
+                }
+                
+                const center = map.getCenter();
+                center.lng -= distancePerSecond / 60;
+                
+                map.easeTo({
+                    center,
+                    duration: 1000,
+                    easing: (t) => t
+                });
+            }
+        }
+
+        // Start spinning
+        setInterval(spinGlobe, 1000);
+
+        // Control buttons
+        document.getElementById('toggleSpin').addEventListener('click', () => {
+            isSpinning = !isSpinning;
+            document.getElementById('toggleSpin').textContent = isSpinning ? 'Stop Spin' : 'Start Spin';
+        });
+
+        document.getElementById('flyToNY').addEventListener('click', () => {
+            isSpinning = false;
+            document.getElementById('toggleSpin').textContent = 'Start Spin';
+            
+            map.flyTo({
+                center: [-74.006, 40.7128],
+                zoom: 12,
+                pitch: 60,
+                bearing: -17.6,
+                duration: 5000,
+                essential: true
+            });
+        });
+
+        document.getElementById('flyToTokyo').addEventListener('click', () => {
+            isSpinning = false;
+            document.getElementById('toggleSpin').textContent = 'Start Spin';
+            
+            map.flyTo({
+                center: [139.6917, 35.6895],
+                zoom: 12,
+                pitch: 60,
+                bearing: 30,
+                duration: 5000,
+                essential: true
+            });
+        });
+
+        document.getElementById('resetView').addEventListener('click', () => {
+            isSpinning = true;
+            document.getElementById('toggleSpin').textContent = 'Stop Spin';
+            
+            map.flyTo({
+                center: [0, 20],
+                zoom: 1.5,
+                pitch: 0,
+                bearing: 0,
+                duration: 3000
+            });
+        });
+    </script>
+</body>
+</html>

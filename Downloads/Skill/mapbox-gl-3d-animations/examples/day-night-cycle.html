@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Day/Night Cycle Animation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-family: sans-serif;
+            z-index: 1;
+            min-width: 200px;
+        }
+
+        h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        .time-display {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .slider-container {
+            margin: 15px 0;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <h3>☀️ Day/Night Cycle</h3>
+        <div class="time-display" id="timeDisplay">12:00</div>
+        <div class="slider-container">
+            <label>Time of Day</label>
+            <input type="range" id="timeSlider" min="0" max="24" step="0.1" value="12">
+        </div>
+        <div class="slider-container">
+            <label>Animation Speed</label>
+            <input type="range" id="speedSlider" min="1" max="100" value="20">
+        </div>
+        <button id="toggleAnimation">Start Animation</button>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/standard',
+            center: [-74.006, 40.7128],
+            zoom: 15,
+            pitch: 60,
+            bearing: -17.6,
+            projection: 'globe'
+        });
+
+        // Time presets (hours mapped to fog settings)
+        const timePresets = {
+            // Night (0:00 - 5:00)
+            night: {
+                color: '#242B4B',
+                'high-color': '#161B36',
+                'space-color': '#0B0D1C',
+                'horizon-blend': 0.1,
+                'star-intensity': 0.8
+            },
+            // Dawn (5:00 - 7:00)
+            dawn: {
+                color: '#f0d9c0',
+                'high-color': '#f5a962',
+                'space-color': '#4a3857',
+                'horizon-blend': 0.06,
+                'star-intensity': 0.1
+            },
+            // Morning (7:00 - 10:00)
+            morning: {
+                color: '#e8f4fc',
+                'high-color': '#74b9ff',
+                'space-color': '#2d3436',
+                'horizon-blend': 0.04,
+                'star-intensity': 0
+            },
+            // Day (10:00 - 16:00)
+            day: {
+                color: 'white',
+                'high-color': '#245cdf',
+                'space-color': '#1d2a4d',
+                'horizon-blend': 0.03,
+                'star-intensity': 0
+            },
+            // Afternoon (16:00 - 18:00)
+            afternoon: {
+                color: '#fff5eb',
+                'high-color': '#ff9f43',
+                'space-color': '#2d3436',
+                'horizon-blend': 0.04,
+                'star-intensity': 0
+            },
+            // Dusk (18:00 - 20:00)
+            dusk: {
+                color: '#dc9f9f',
+                'high-color': '#ec8943',
+                'space-color': '#1d1d3a',
+                'horizon-blend': 0.08,
+                'star-intensity': 0.2
+            },
+            // Evening (20:00 - 24:00)
+            evening: {
+                color: '#3d3d5c',
+                'high-color': '#1a1a3a',
+                'space-color': '#0a0a1a',
+                'horizon-blend': 0.1,
+                'star-intensity': 0.6
+            }
+        };
+
+        // Get fog settings for a specific hour
+        function getFogForTime(hour) {
+            let preset1, preset2, blend;
+
+            if (hour < 5) {
+                return timePresets.night;
+            } else if (hour < 7) {
+                preset1 = timePresets.night;
+                preset2 = timePresets.dawn;
+                blend = (hour - 5) / 2;
+            } else if (hour < 10) {
+                preset1 = timePresets.dawn;
+                preset2 = timePresets.morning;
+                blend = (hour - 7) / 3;
+            } else if (hour < 16) {
+                return timePresets.day;
+            } else if (hour < 18) {
+                preset1 = timePresets.day;
+                preset2 = timePresets.afternoon;
+                blend = (hour - 16) / 2;
+            } else if (hour < 20) {
+                preset1 = timePresets.afternoon;
+                preset2 = timePresets.dusk;
+                blend = (hour - 18) / 2;
+            } else if (hour < 22) {
+                preset1 = timePresets.dusk;
+                preset2 = timePresets.evening;
+                blend = (hour - 20) / 2;
+            } else {
+                preset1 = timePresets.evening;
+                preset2 = timePresets.night;
+                blend = (hour - 22) / 2;
+            }
+
+            // Interpolate between presets
+            return interpolateFog(preset1, preset2, blend);
+        }
+
+        // Interpolate between two fog settings
+        function interpolateFog(fog1, fog2, t) {
+            return {
+                color: fog1.color, // Using discrete colors for simplicity
+                'high-color': t < 0.5 ? fog1['high-color'] : fog2['high-color'],
+                'space-color': t < 0.5 ? fog1['space-color'] : fog2['space-color'],
+                'horizon-blend': lerp(fog1['horizon-blend'], fog2['horizon-blend'], t),
+                'star-intensity': lerp(fog1['star-intensity'], fog2['star-intensity'], t)
+            };
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        // Format time for display
+        function formatTime(hour) {
+            const h = Math.floor(hour);
+            const m = Math.floor((hour - h) * 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        }
+
+        // Get light preset for time
+        function getLightPreset(hour) {
+            if (hour < 5 || hour >= 21) return 'night';
+            if (hour < 8) return 'dawn';
+            if (hour < 17) return 'day';
+            if (hour < 21) return 'dusk';
+            return 'night';
+        }
+
+        // Update map for a given time
+        function updateTime(hour) {
+            const fog = getFogForTime(hour);
+            map.setFog(fog);
+
+            const lightPreset = getLightPreset(hour);
+            map.setConfigProperty('basemap', 'lightPreset', lightPreset);
+
+            document.getElementById('timeDisplay').textContent = formatTime(hour);
+            document.getElementById('timeSlider').value = hour;
+        }
+
+        // Animation state
+        let isAnimating = false;
+        let animationFrame;
+        let currentHour = 12;
+
+        function animate() {
+            const speed = parseFloat(document.getElementById('speedSlider').value) / 100;
+            currentHour = (currentHour + speed * 0.1) % 24;
+            updateTime(currentHour);
+
+            if (isAnimating) {
+                animationFrame = requestAnimationFrame(animate);
+            }
+        }
+
+        function toggleAnimation() {
+            isAnimating = !isAnimating;
+            document.getElementById('toggleAnimation').textContent =
+                isAnimating ? 'Stop Animation' : 'Start Animation';
+
+            if (isAnimating) {
+                animate();
+            } else if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+        }
+
+        // Initialize
+        map.on('load', () => {
+            updateTime(12);
+        });
+
+        // Event listeners
+        document.getElementById('timeSlider').addEventListener('input', (e) => {
+            currentHour = parseFloat(e.target.value);
+            updateTime(currentHour);
+        });
+
+        document.getElementById('toggleAnimation').addEventListener('click', toggleAnimation);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Custom Layer with Three.js 3D Model</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 4px;
+            font-family: sans-serif;
+            font-size: 14px;
+            z-index: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="info">
+        <strong>Three.js Integration Demo</strong><br>
+        Rotating 3D cube rendered via custom WebGL layer
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+        // Model position (San Francisco)
+        const modelOrigin = [-122.4194, 37.7749];
+        const modelAltitude = 100; // 100 meters above ground
+
+        // Convert to Mercator coordinates
+        const modelAsMercatorCoordinate = mapboxgl.MercatorCoordinate.fromLngLat(
+            modelOrigin,
+            modelAltitude
+        );
+
+        // Transformation matrix for the model
+        const modelTransform = {
+            translateX: modelAsMercatorCoordinate.x,
+            translateY: modelAsMercatorCoordinate.y,
+            translateZ: modelAsMercatorCoordinate.z,
+            rotateX: Math.PI / 2,
+            rotateY: 0,
+            rotateZ: 0,
+            scale: modelAsMercatorCoordinate.meterInMercatorCoordinateUnits() * 50
+        };
+
+        // Create custom layer for Three.js
+        const customLayer = {
+            id: '3d-model',
+            type: 'custom',
+            renderingMode: '3d',
+
+            onAdd: function (map, gl) {
+                // Create camera (will be synced with Mapbox)
+                this.camera = new THREE.Camera();
+
+                // Create scene
+                this.scene = new THREE.Scene();
+
+                // Add lighting
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(0, -70, 100).normalize();
+                this.scene.add(directionalLight);
+
+                const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+                directionalLight2.position.set(0, 70, 100).normalize();
+                this.scene.add(directionalLight2);
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+                this.scene.add(ambientLight);
+
+                // Create a rotating cube
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshPhongMaterial({
+                    color: 0x3366ff,
+                    shininess: 100
+                });
+                this.cube = new THREE.Mesh(geometry, material);
+                this.scene.add(this.cube);
+
+                // Create a second cube (different color)
+                const material2 = new THREE.MeshPhongMaterial({
+                    color: 0xff6633,
+                    shininess: 100
+                });
+                this.cube2 = new THREE.Mesh(geometry, material2);
+                this.cube2.position.x = 2;
+                this.scene.add(this.cube2);
+
+                // Create a third cube
+                const material3 = new THREE.MeshPhongMaterial({
+                    color: 0x33ff66,
+                    shininess: 100
+                });
+                this.cube3 = new THREE.Mesh(geometry, material3);
+                this.cube3.position.x = -2;
+                this.scene.add(this.cube3);
+
+                // Setup renderer using Mapbox's WebGL context
+                this.renderer = new THREE.WebGLRenderer({
+                    canvas: map.getCanvas(),
+                    context: gl,
+                    antialias: true
+                });
+
+                // Required: don't clear the canvas
+                this.renderer.autoClear = false;
+
+                this.map = map;
+                this.startTime = performance.now();
+            },
+
+            render: function (gl, matrix) {
+                // Animate the cubes
+                const elapsed = (performance.now() - this.startTime) / 1000;
+                this.cube.rotation.x = elapsed * 0.5;
+                this.cube.rotation.y = elapsed * 0.7;
+
+                this.cube2.rotation.x = elapsed * 0.3;
+                this.cube2.rotation.z = elapsed * 0.8;
+                this.cube2.position.y = Math.sin(elapsed) * 0.5;
+
+                this.cube3.rotation.y = elapsed * 0.4;
+                this.cube3.rotation.z = elapsed * 0.6;
+                this.cube3.position.y = Math.cos(elapsed) * 0.5;
+
+                // Build transformation matrix
+                const rotationX = new THREE.Matrix4().makeRotationAxis(
+                    new THREE.Vector3(1, 0, 0),
+                    modelTransform.rotateX
+                );
+                const rotationY = new THREE.Matrix4().makeRotationAxis(
+                    new THREE.Vector3(0, 1, 0),
+                    modelTransform.rotateY
+                );
+                const rotationZ = new THREE.Matrix4().makeRotationAxis(
+                    new THREE.Vector3(0, 0, 1),
+                    modelTransform.rotateZ
+                );
+
+                const m = new THREE.Matrix4().fromArray(matrix);
+                const l = new THREE.Matrix4()
+                    .makeTranslation(
+                        modelTransform.translateX,
+                        modelTransform.translateY,
+                        modelTransform.translateZ
+                    )
+                    .scale(
+                        new THREE.Vector3(
+                            modelTransform.scale,
+                            -modelTransform.scale,
+                            modelTransform.scale
+                        )
+                    )
+                    .multiply(rotationX)
+                    .multiply(rotationY)
+                    .multiply(rotationZ);
+
+                // Sync camera with Mapbox
+                this.camera.projectionMatrix = m.multiply(l);
+
+                // Render
+                this.renderer.resetState();
+                this.renderer.render(this.scene, this.camera);
+
+                // Request continuous repainting
+                this.map.triggerRepaint();
+            }
+        };
+
+        // Initialize map
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: modelOrigin,
+            zoom: 18,
+            pitch: 60,
+            bearing: 41,
+            antialias: true // Required for custom layers
+        });
+
+        map.on('load', () => {
+            // Add the custom Three.js layer
+            map.addLayer(customLayer);
+        });
+    </script>
+</body>
+
+</html>

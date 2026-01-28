@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>3D Terrain with Animated Path</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            z-index: 1;
+            font-family: sans-serif;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px 0;
+            cursor: pointer;
+            display: block;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .progress {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button id="startAnimation">Start Path Animation</button>
+        <button id="followCamera">Follow with Camera</button>
+        <button id="resetPath">Reset</button>
+        <div class="progress" id="progress">Ready</div>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+        // Mountain route coordinates (example: Swiss Alps area)
+        const routeCoordinates = [
+            [7.6600, 45.9764],
+            [7.6650, 45.9780],
+            [7.6700, 45.9800],
+            [7.6750, 45.9815],
+            [7.6800, 45.9835],
+            [7.6850, 45.9850],
+            [7.6900, 45.9870],
+            [7.6950, 45.9890],
+            [7.7000, 45.9910],
+            [7.7050, 45.9930]
+        ];
+
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-streets-v12',
+            center: routeCoordinates[0],
+            zoom: 14,
+            pitch: 60,
+            bearing: 30
+        });
+
+        let animationFrame;
+        let currentProgress = 0;
+
+        map.on('load', () => {
+            // Add terrain
+            map.addSource('mapbox-dem', {
+                type: 'raster-dem',
+                url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                tileSize: 512,
+                maxzoom: 14
+            });
+
+            map.setTerrain({
+                source: 'mapbox-dem',
+                exaggeration: 1.5
+            });
+
+            // Add route line source
+            map.addSource('route', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: routeCoordinates
+                    }
+                }
+            });
+
+            // Add animated progress line
+            map.addSource('route-progress', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: [] }
+                }
+            });
+
+            // Add moving point
+            map.addSource('point', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: routeCoordinates[0]
+                    }
+                }
+            });
+
+            // Route background line
+            map.addLayer({
+                id: 'route-bg',
+                type: 'line',
+                source: 'route',
+                paint: {
+                    'line-color': '#888',
+                    'line-width': 4,
+                    'line-opacity': 0.5
+                }
+            });
+
+            // Animated progress line
+            map.addLayer({
+                id: 'route-progress',
+                type: 'line',
+                source: 'route-progress',
+                paint: {
+                    'line-color': '#ff6b6b',
+                    'line-width': 6
+                }
+            });
+
+            // Moving point
+            map.addLayer({
+                id: 'point',
+                type: 'circle',
+                source: 'point',
+                paint: {
+                    'circle-radius': 12,
+                    'circle-color': '#ff6b6b',
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#fff'
+                }
+            });
+        });
+
+        // Animation functions
+        const route = turf.lineString(routeCoordinates);
+        const lineLength = turf.length(route, { units: 'kilometers' });
+
+        function animatePath(followCamera = false) {
+            const duration = 10000;
+            const startTime = performance.now();
+            currentProgress = 0;
+
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                currentProgress = progress;
+
+                // Update progress display
+                document.getElementById('progress').textContent =
+                    `Progress: ${Math.round(progress * 100)}%`;
+
+                // Calculate current position along path
+                const distance = progress * lineLength;
+                const point = turf.along(route, distance, { units: 'kilometers' });
+                const coords = point.geometry.coordinates;
+
+                // Update point position
+                map.getSource('point').setData(point);
+
+                // Update progress line
+                const progressCoords = [];
+                const steps = Math.ceil(progress * (routeCoordinates.length - 1));
+                for (let i = 0; i <= steps && i < routeCoordinates.length; i++) {
+                    const segmentProgress = (progress * (routeCoordinates.length - 1)) - i;
+                    if (segmentProgress >= 0) {
+                        progressCoords.push(routeCoordinates[i]);
+                    }
+                }
+                // Add current interpolated point
+                progressCoords.push(coords);
+
+                map.getSource('route-progress').setData({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: progressCoords
+                    }
+                });
+
+                // Camera follow mode
+                if (followCamera && progress < 1) {
+                    const nextDistance = Math.min(distance + 0.05, lineLength);
+                    const nextPoint = turf.along(route, nextDistance, { units: 'kilometers' });
+                    const bearing = turf.bearing(point, nextPoint);
+
+                    map.easeTo({
+                        center: coords,
+                        bearing: bearing,
+                        pitch: 70,
+                        duration: 0
+                    });
+                }
+
+                if (progress < 1) {
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    document.getElementById('progress').textContent = 'Complete!';
+                }
+            }
+
+            animationFrame = requestAnimationFrame(animate);
+        }
+
+        function resetAnimation() {
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+
+            map.getSource('point').setData({
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: routeCoordinates[0]
+                }
+            });
+
+            map.getSource('route-progress').setData({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: [] }
+            });
+
+            map.flyTo({
+                center: routeCoordinates[0],
+                zoom: 14,
+                pitch: 60,
+                bearing: 30,
+                duration: 2000
+            });
+
+            document.getElementById('progress').textContent = 'Ready';
+        }
+
+        // Event listeners
+        document.getElementById('startAnimation').addEventListener('click', () => {
+            resetAnimation();
+            setTimeout(() => animatePath(false), 100);
+        });
+
+        document.getElementById('followCamera').addEventListener('click', () => {
+            resetAnimation();
+            setTimeout(() => animatePath(true), 100);
+        });
+
+        document.getElementById('resetPath').addEventListener('click', resetAnimation);
+    </script>
+</body>
+
+</html>

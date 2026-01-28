@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>3D Buildings with Rise Animation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            z-index: 1;
+            font-family: sans-serif;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px 0;
+            cursor: pointer;
+            display: block;
+            width: 100%;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+        }
+
+        label {
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <label>Light Preset:</label>
+        <select id="lightPreset">
+            <option value="day">Day</option>
+            <option value="dawn">Dawn</option>
+            <option value="dusk" selected>Dusk</option>
+            <option value="night">Night</option>
+        </select>
+        <button id="riseBuildings">Animate Buildings Rise</button>
+        <button id="rotateView">Rotate View</button>
+        <button id="flyAround">Fly Around City</button>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/standard',
+            center: [-74.0066, 40.7135], // NYC Financial District
+            zoom: 16,
+            pitch: 60,
+            bearing: -17.6,
+            config: {
+                basemap: {
+                    lightPreset: 'dusk'
+                }
+            }
+        });
+
+        let rotationAnimation;
+
+        map.on('load', () => {
+            // Add custom 3D buildings layer with color based on height
+            map.addLayer({
+                id: '3d-buildings-custom',
+                source: 'composite',
+                'source-layer': 'building',
+                filter: ['==', 'extrude', 'true'],
+                type: 'fill-extrusion',
+                minzoom: 15,
+                paint: {
+                    'fill-extrusion-color': [
+                        'interpolate',
+                        ['linear'],
+                        ['get', 'height'],
+                        0, '#f0f0f0',
+                        50, '#d4a276',
+                        100, '#bc6c25',
+                        200, '#9a5614',
+                        400, '#7f4f24'
+                    ],
+                    'fill-extrusion-height': ['get', 'height'],
+                    'fill-extrusion-base': ['get', 'min_height'],
+                    'fill-extrusion-opacity': 0.9
+                }
+            });
+        });
+
+        // Animate buildings rising from ground
+        function animateBuildingsRise() {
+            const duration = 3000;
+            const startTime = performance.now();
+
+            // Start from 0 height
+            map.setPaintProperty('3d-buildings-custom', 'fill-extrusion-height', 0);
+
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Ease-out cubic for smooth deceleration
+                const eased = 1 - Math.pow(1 - progress, 3);
+
+                map.setPaintProperty(
+                    '3d-buildings-custom',
+                    'fill-extrusion-height',
+                    ['*', ['get', 'height'], eased]
+                );
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Continuous rotation animation
+        function startRotation() {
+            if (rotationAnimation) {
+                cancelAnimationFrame(rotationAnimation);
+                rotationAnimation = null;
+                return;
+            }
+
+            let bearing = map.getBearing();
+
+            function rotate() {
+                bearing = (bearing + 0.3) % 360;
+                map.setBearing(bearing);
+                rotationAnimation = requestAnimationFrame(rotate);
+            }
+
+            rotationAnimation = requestAnimationFrame(rotate);
+        }
+
+        // Fly around the city
+        function flyAround() {
+            if (rotationAnimation) {
+                cancelAnimationFrame(rotationAnimation);
+                rotationAnimation = null;
+            }
+
+            const locations = [
+                { center: [-74.0066, 40.7135], bearing: 0, pitch: 60 },
+                { center: [-73.9857, 40.7484], bearing: 90, pitch: 65 },
+                { center: [-74.0445, 40.6892], bearing: 180, pitch: 55 },
+                { center: [-73.9680, 40.7614], bearing: 270, pitch: 70 }
+            ];
+
+            let currentIndex = 0;
+
+            function flyToNext() {
+                if (currentIndex >= locations.length) {
+                    currentIndex = 0;
+                }
+
+                const loc = locations[currentIndex];
+
+                map.flyTo({
+                    center: loc.center,
+                    bearing: loc.bearing,
+                    pitch: loc.pitch,
+                    zoom: 16,
+                    duration: 5000,
+                    essential: true
+                });
+
+                currentIndex++;
+
+                map.once('moveend', () => {
+                    setTimeout(flyToNext, 1000);
+                });
+            }
+
+            flyToNext();
+        }
+
+        // Light preset change
+        document.getElementById('lightPreset').addEventListener('change', (e) => {
+            map.setConfigProperty('basemap', 'lightPreset', e.target.value);
+        });
+
+        document.getElementById('riseBuildings').addEventListener('click', animateBuildingsRise);
+        document.getElementById('rotateView').addEventListener('click', startRotation);
+        document.getElementById('flyAround').addEventListener('click', flyAround);
+    </script>
+</body>
+
+</html>
