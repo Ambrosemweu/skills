@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framer Motion - Scroll Progress Animation</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/framer-motion@11/dist/framer-motion.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: white;
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transform-origin: left;
+            z-index: 100;
+        }
+
+        .hero {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+        }
+
+        section {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            backdrop-filter: blur(10px);
+        }
+
+        .card h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+
+        .card p {
+            font-size: 16px;
+            line-height: 1.8;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .section-1 {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        }
+
+        .section-2 {
+            background: linear-gradient(135deg, #134e5e 0%, #71b280 100%);
+        }
+
+        .section-3 {
+            background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+        }
+
+        .section-4 {
+            background: linear-gradient(135deg, #8e2de2 0%, #4a00e0 100%);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { motion, useScroll, useTransform, useSpring } = Motion;
+        const { useRef } = React;
+
+        // Scroll progress bar component
+        function ProgressBar() {
+            const { scrollYProgress } = useScroll();
+            const scaleX = useSpring(scrollYProgress, {
+                stiffness: 100,
+                damping: 30,
+                restDelta: 0.001
+            });
+
+            return (
+                <motion.div
+                    className="progress-bar"
+                    style={{ scaleX }}
+                />
+            );
+        }
+
+        // Section with scroll-triggered animation
+        function AnimatedSection({ children, className }) {
+            const ref = useRef(null);
+            const { scrollYProgress } = useScroll({
+                target: ref,
+                offset: ["start end", "end start"]
+            });
+
+            const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0, 1, 1, 0]);
+            const y = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [100, 0, 0, -100]);
+            const scale = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.8, 1, 1, 0.8]);
+
+            return (
+                <section ref={ref} className={className}>
+                    <motion.div
+                        className="card"
+                        style={{ opacity, y, scale }}
+                    >
+                        {children}
+                    </motion.div>
+                </section>
+            );
+        }
+
+        // Scroll indicator animation
+        function ScrollIndicator() {
+            return (
+                <motion.div
+                    className="scroll-indicator"
+                    animate={{ y: [0, 10, 0] }}
+                    transition={{
+                        duration: 1.5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                >
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                        <path d="M12 5v14M5 12l7 7 7-7" />
+                    </svg>
+                </motion.div>
+            );
+        }
+
+        function App() {
+            return (
+                <>
+                    <ProgressBar />
+
+                    <div className="hero">
+                        <motion.h1
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8 }}
+                        >
+                            Scroll Progress Demo
+                        </motion.h1>
+                        <motion.p
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, delay: 0.2 }}
+                        >
+                            Watch the progress bar at the top as you scroll
+                        </motion.p>
+                        <ScrollIndicator />
+                    </div>
+
+                    <AnimatedSection className="section-1">
+                        <h2>💡 useScroll Hook</h2>
+                        <p>
+                            The useScroll hook tracks scroll position and returns motion values
+                            for scrollX, scrollY, scrollXProgress, and scrollYProgress. These
+                            values update in real-time as you scroll, enabling smooth scroll-linked
+                            animations without causing re-renders.
+                        </p>
+                    </AnimatedSection>
+
+                    <AnimatedSection className="section-2">
+                        <h2>🔄 useTransform Hook</h2>
+                        <p>
+                            useTransform lets you derive new motion values from existing ones.
+                            In this demo, we're transforming scroll progress into opacity, Y position,
+                            and scale values. Each section fades in, slides up, and scales as it
+                            enters the viewport.
+                        </p>
+                    </AnimatedSection>
+
+                    <AnimatedSection className="section-3">
+                        <h2>🌊 useSpring for Smoothness</h2>
+                        <p>
+                            The progress bar uses useSpring to smooth out the scroll position.
+                            Instead of jumping directly to the scroll position, it animates there
+                            with spring physics, creating a more polished feel even during
+                            fast scrolling.
+                        </p>
+                    </AnimatedSection>
+
+                    <AnimatedSection className="section-4">
+                        <h2>📐 Scroll Offset Configuration</h2>
+                        <p>
+                            The offset prop controls when animations trigger. ["start end", "end start"]
+                            means: start animating when the section's start reaches the viewport's end,
+                            and finish when the section's end reaches the viewport's start. This creates
+                            a full enter-and-exit animation cycle.
+                        </p>
+                    </AnimatedSection>
+                </>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

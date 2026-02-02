@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framer Motion - Drag Gesture Demo</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/framer-motion@11/dist/framer-motion.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        p {
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .draggable-box {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            cursor: grab;
+            user-select: none;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+        }
+
+        .draggable-box:active {
+            cursor: grabbing;
+        }
+
+        .icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .info-panel {
+            margin-top: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px 25px;
+            border-radius: 12px;
+            color: white;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .info-row {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { motion, useMotionValue, useTransform } = Motion;
+        const { useState } = React;
+
+        function DragDemo() {
+            const [dragInfo, setDragInfo] = useState({ x: 0, y: 0, velocity: { x: 0, y: 0 } });
+
+            // Motion values for position
+            const x = useMotionValue(0);
+            const y = useMotionValue(0);
+
+            // Transform x/y to rotation and scale
+            const rotateZ = useTransform(x, [-150, 150], [-15, 15]);
+            const scale = useTransform(
+                [x, y],
+                ([latestX, latestY]) => {
+                    const distance = Math.sqrt(latestX ** 2 + latestY ** 2);
+                    return 1 + distance / 500;
+                }
+            );
+
+            // Transform to background color
+            const backgroundColor = useTransform(
+                x,
+                [-150, 0, 150],
+                [
+                    "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                ]
+            );
+
+            const constraintsRef = React.useRef(null);
+
+            return (
+                <>
+                    <h1>Drag Gesture Demo</h1>
+                    <p>Drag the box around. Watch it rotate and scale based on position!</p>
+
+                    <motion.div
+                        ref={constraintsRef}
+                        className="container"
+                    >
+                        <motion.div
+                            className="draggable-box"
+                            drag
+                            dragConstraints={constraintsRef}
+                            dragElastic={0.1}
+                            dragTransition={{
+                                bounceStiffness: 600,
+                                bounceDamping: 20
+                            }}
+                            style={{
+                                x,
+                                y,
+                                rotateZ,
+                                scale,
+                                background: backgroundColor
+                            }}
+                            whileDrag={{
+                                boxShadow: "0 20px 60px rgba(102, 126, 234, 0.6)"
+                            }}
+                            onDrag={(event, info) => {
+                                setDragInfo({
+                                    x: Math.round(info.offset.x),
+                                    y: Math.round(info.offset.y),
+                                    velocity: {
+                                        x: Math.round(info.velocity.x),
+                                        y: Math.round(info.velocity.y)
+                                    }
+                                });
+                            }}
+                            onDragEnd={() => {
+                                setDragInfo({ x: 0, y: 0, velocity: { x: 0, y: 0 } });
+                            }}
+                        >
+                            <span className="icon">✋</span>
+                            <span>Drag Me</span>
+                        </motion.div>
+                    </motion.div>
+
+                    <div className="info-panel">
+                        <div className="info-row">
+                            <span>Offset: ({dragInfo.x}, {dragInfo.y})</span>
+                            <span>Velocity: ({dragInfo.velocity.x}, {dragInfo.velocity.y})</span>
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<DragDemo />);
+    </script>
+</body>
+
+</html>
